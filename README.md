@@ -230,7 +230,7 @@ Hinweis: Die Tabelle `invoices` wird vom gRPC Service beim Start automatisch ang
 Lokal im Host:
 
 ```bash
-python client/test_client.py
+.venv\Scripts\python.exe -m client.test_client
 ```
 
 Wenn `python` im Host nicht gefunden wird, nutze die Projekt-venv:
@@ -239,7 +239,7 @@ Linux/macOS:
 
 ```bash
 source .venv/bin/activate
-python client/test_client.py
+.venv\Scripts\python.exe -m client.test_client
 ```
 
 Windows (PowerShell):
