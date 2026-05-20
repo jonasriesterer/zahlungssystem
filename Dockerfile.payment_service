@@ -2,14 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install protobuf compiler
+# Install protobuf compiler and uv
 RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir uv
 
-# Copy requirements
-COPY requirements.txt .
+# Copy project metadata and README (required by pyproject.toml)
+COPY pyproject.toml uv.lock README.md ./
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Sync Python dependencies via uv
+RUN uv sync --frozen
 
 # Copy shared modules
 COPY config/ ./config/
@@ -21,15 +22,15 @@ COPY payment_service/ ./payment_service/
 # Generate gRPC Python code from proto files (need invoice_pb2 for client calls)
 RUN mkdir -p ./payment_service/generated && touch ./payment_service/generated/__init__.py
 RUN mkdir -p ./grpc_service_proto/generated && touch ./grpc_service_proto/generated/__init__.py
-RUN python -m grpc_tools.protoc -I./payment_service/proto --python_out=./payment_service/generated --grpc_python_out=./payment_service/generated ./payment_service/proto/payment.proto
+RUN .venv/bin/python -m grpc_tools.protoc -I./payment_service/proto --python_out=./payment_service/generated --grpc_python_out=./payment_service/generated ./payment_service/proto/payment.proto
 
 # Copy gRPC service proto for generating invoice_pb2 (needed by payment service for gRPC calls)
 COPY grpc_service/proto/ ./grpc_service_proto/
-RUN python -m grpc_tools.protoc -I./grpc_service_proto --python_out=./payment_service/generated --grpc_python_out=./payment_service/generated ./grpc_service_proto/invoice.proto
+RUN .venv/bin/python -m grpc_tools.protoc -I./grpc_service_proto --python_out=./payment_service/generated --grpc_python_out=./payment_service/generated ./grpc_service_proto/invoice.proto
 
 # Fix relative imports in generated files
 RUN sed -i 's/^import invoice_pb2 as/from . import invoice_pb2 as/' ./payment_service/generated/invoice_pb2_grpc.py
 RUN sed -i 's/^import payment_pb2 as/from . import payment_pb2 as/' ./payment_service/generated/payment_pb2_grpc.py
 
 # Run payment service
-CMD ["python", "-m", "payment_service"]
+CMD [".venv/bin/python", "-m", "payment_service"]

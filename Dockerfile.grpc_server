@@ -2,14 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install protobuf compiler
+# Install protobuf compiler and uv
 RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir uv
 
-# Copy requirements
-COPY requirements.txt .
+# Copy project metadata and README (required by pyproject.toml)
+COPY pyproject.toml README.md ./
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Sync Python dependencies via uv (creates/uses uv.lock)
+RUN uv sync
 
 # Copy shared modules
 COPY config/ ./config/
@@ -20,8 +21,8 @@ COPY grpc_service/ ./grpc_service/
 
 # Generate gRPC Python code from proto files
 RUN mkdir -p ./grpc_service/generated && touch ./grpc_service/generated/__init__.py
-RUN python -m grpc_tools.protoc -I./grpc_service/proto --python_out=./grpc_service/generated --grpc_python_out=./grpc_service/generated ./grpc_service/proto/invoice.proto
+RUN .venv/bin/python -m grpc_tools.protoc -I./grpc_service/proto --python_out=./grpc_service/generated --grpc_python_out=./grpc_service/generated ./grpc_service/proto/invoice.proto
 RUN sed -i 's/^import invoice_pb2 as/from . import invoice_pb2 as/' ./grpc_service/generated/invoice_pb2_grpc.py
 
 # Run gRPC server
-CMD ["python", "-m", "grpc_service"]
+CMD [".venv/bin/python", "-m", "grpc_service"]

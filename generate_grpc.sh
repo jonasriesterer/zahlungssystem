@@ -14,14 +14,13 @@ GEN_DIR_GRPC="$SCRIPT_DIR/grpc_service/generated"
 mkdir -p "$GEN_DIR_GRPC"
 touch "$GEN_DIR_GRPC/__init__.py"
 
-if [[ -x "$SCRIPT_DIR/.venv/bin/python" ]]; then
-  PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python"
-else
-  PYTHON_BIN="python3"
-fi
+# Use uv to run Python modules
+run_python_module() {
+  uv run python -m "$@"
+}
 
 # Generate invoice service for gRPC
-"$PYTHON_BIN" -m grpc_tools.protoc \
+run_python_module grpc_tools.protoc \
   -I./grpc_service/proto \
   --python_out="$GEN_DIR_GRPC" \
   --grpc_python_out="$GEN_DIR_GRPC" \
@@ -37,14 +36,14 @@ mkdir -p "$GEN_DIR_PAYMENT"
 touch "$GEN_DIR_PAYMENT/__init__.py"
 
 # Generate payment messages
-"$PYTHON_BIN" -m grpc_tools.protoc \
+run_python_module grpc_tools.protoc \
   -I./payment_service/proto \
   --python_out="$GEN_DIR_PAYMENT" \
   --grpc_python_out="$GEN_DIR_PAYMENT" \
   ./payment_service/proto/payment.proto
 
 # Generate invoice client stubs for payment service (to call gRPC service)
-"$PYTHON_BIN" -m grpc_tools.protoc \
+run_python_module grpc_tools.protoc \
   -I./grpc_service/proto \
   --python_out="$GEN_DIR_PAYMENT" \
   --grpc_python_out="$GEN_DIR_PAYMENT" \

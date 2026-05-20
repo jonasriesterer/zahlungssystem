@@ -2,14 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install protobuf compiler
+# Install protobuf compiler and uv
 RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir uv
 
-# Copy requirements
-COPY requirements.txt .
+# Copy project metadata and README (required by pyproject.toml)
+COPY pyproject.toml uv.lock README.md ./
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Sync Python dependencies via uv
+RUN uv sync --frozen
 
 # Copy application code
 COPY app/ ./app/
@@ -17,9 +18,9 @@ COPY client/ ./client/
 
 # Generate gRPC Python code from proto files
 RUN mkdir -p ./app/generated && touch ./app/generated/__init__.py
-RUN python -m grpc_tools.protoc -I./app/proto --python_out=./app/generated --grpc_python_out=./app/generated ./app/proto/invoice.proto
-RUN python -m grpc_tools.protoc -I./app/proto --python_out=./app/generated --grpc_python_out=./app/generated ./app/proto/payment.proto
+RUN .venv/bin/python -m grpc_tools.protoc -I./app/proto --python_out=./app/generated --grpc_python_out=./app/generated ./app/proto/invoice.proto
+RUN .venv/bin/python -m grpc_tools.protoc -I./app/proto --python_out=./app/generated --grpc_python_out=./app/generated ./app/proto/payment.proto
 RUN sed -i 's/^import invoice_pb2 as/from . import invoice_pb2 as/' ./app/generated/invoice_pb2_grpc.py
 
 # Run test client
-CMD ["python", "client/test_client.py"]
+CMD [".venv/bin/python", "client/test_client.py"]

@@ -1,7 +1,8 @@
 .git
 .gitignore
-README*.md
-*.md
+API_REFERENCE.md
+LOGGING_GUIDE.md
+QUICK_REFERENCE.md
 __pycache__
 *.pyc
 .pytest_cache
