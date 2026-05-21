@@ -41,6 +41,20 @@ services:
     networks:
       - invoice_network
 
+  execute-payment-worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile.workers
+    command: [".venv/bin/python", "-m", "workers.execute_payment_worker"]
+    environment:
+      CAMUNDA_WORKER_NAME: execute-payment-worker
+      DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
+      PYTHONPATH: /app
+    env_file:
+      - ../.env
+    networks:
+      - invoice_network
+
 networks:
   invoice_network:
     external: true
