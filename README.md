@@ -8,7 +8,8 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
 flowchart LR
        C[Test Client\nclient/test_client.py]
        G[gRPC Server:50051\ngrpc_service/grpc_server.py]
-       W[Camunda Worker\ngrpc_service/register_invoice_worker.py]
+       W1[Camunda Worker\nworkers/register_invoice_worker.py]
+       W2[Camunda Worker\nworkers/request_info_worker.py]
        DB[(PostgreSQL:5432\nDB: invoice_db)]
        A[pgAdmin:5050]
        P[Payment Service\npayment_service/payment_service.py]
@@ -20,14 +21,15 @@ flowchart LR
 
        C -->|Create/Get/List/Update/Delete Invoice| G
        G -->|SQL| DB
-       W -->|SQL| DB
+       W1 -->|SQL| DB
        A -->|Connects to| DB
 
        C -->|Publish payment order| QO
        QO -->|Consume| P
        P -->|Publish result| QR
        P -->|UpdateInvoiceStatus| G
-       C -->|register-invoice job| W
+       C -->|register-invoice job| W1
+       C -->|request-info-worker job| W2
 ```
 
 ---
@@ -143,7 +145,7 @@ Message ACK → Bestätigung an RabbitMQ
 - Invoice not found → Result "failed" senden, Message ACK
 - DB Update Error → Message NACK mit `requeue=True` (Retry)
 
-### Camunda 8 Job Worker (`grpc_service/register_invoice_worker.py`)
+### Camunda 8 Job Worker (`workers/register_invoice_worker.py`)
 
 **Zweck:** Verarbeitet Camunda-Jobs mit dem Typ `register-invoice` und speichert neue Rechnungen in der Datenbank.
 
@@ -175,6 +177,35 @@ Diese Fehler werden als Zeebe-Fehler beendet und können im BPMN-Modell mit Erro
 
 - Datenbank- oder Infrastrukturprobleme werden als Job-Failure gemeldet, damit Camunda den Job gemäß Retry-Policy erneut versuchen kann.
 
+### Camunda 8 Job Worker (`workers/request_info_worker.py`)
+
+**Zweck:** Verarbeitet Camunda-Jobs mit dem Typ `request-info-worker` und normalisiert eine Informationsanfrage für Camunda 8 Cloud.
+
+**Eingangsvariablen:**
+
+- `requestedInfo`, `message` oder `details`
+- optional `requestId`
+- optional `subject`
+- optional `recipient` oder `customerEmail`
+
+**Ergebnis bei Erfolg:**
+
+- `success=true`
+- `message`
+- `jobType`
+- `requestId`
+- `subject`
+- `requestedInfo`
+- `recipient`
+- `context`
+- `status`
+- `requestedAt`
+
+**Fehlerbehandlung:**
+
+- Fehlende Anfrageinhalte werden als Zeebe-Fehler zurückgegeben.
+- Unerwartete technische Fehler werden als Job-Failure gemeldet.
+
 #### Setup für Camunda Cloud SaaS
 
 1. Kopiere `.env.example` zu `.env`:
@@ -187,8 +218,8 @@ cp .env.example .env
 
 ```bash
 CAMUNDA_CLIENT_MODE=saas
-CAMUNDA_CLIENT_ID=2qwRDM0MDQYft~UA5o_Y27KQl6DhKmOc
-CAMUNDA_CLIENT_SECRET=IyGgtDJJ2NmkZR8zdHHO9h.XG6YphoVgGez3cC~LgZni64lqVryMRA84YyW34zTh
+CAMUNDA_CLIENT_AUTH_CLIENT_ID=2qwRDM0MDQYft~UA5o_Y27KQl6DhKmOc
+CAMUNDA_CLIENT_AUTH_CLIENT_SECRET=IyGgtDJJ2NmkZR8zdHHO9h.XG6YphoVgGez3cC~LgZni64lqVryMRA84YyW34zTh
 CAMUNDA_CLIENT_CLOUD_CLUSTER_ID=487e2664-45fe-4a21-9e53-860eddc37e5e
 CAMUNDA_CLIENT_CLOUD_REGION=bru-2
 CAMUNDA_REST_ADDRESS=https://487e2664-45fe-4a21-9e53-860eddc37e5e.bru-2.zeebe.camunda.io/v2
@@ -199,13 +230,15 @@ CAMUNDA_REST_ADDRESS=https://487e2664-45fe-4a21-9e53-860eddc37e5e.bru-2.zeebe.ca
 **Lokal mit `uv`:**
 
 ```bash
-uv run python -m grpc_service.register_invoice_worker
+uv run python -m workers.register_invoice_worker
+
+uv run python -m workers.request_info_worker
 ```
 
 **Mit Docker Compose:**
 
 ```bash
-docker compose --profile camunda up -d --build
+docker compose -f workers/docker-compose.yml up -d --build
 ```
 
 Der Worker wird sich automatisch mit deinem Camunda Cloud Cluster verbinden!
@@ -275,7 +308,9 @@ uv run python -m payment_service
 Nur sinnvoll, wenn du einen lokalen Zeebe/Camunda 8 Gateway laufen hast:
 
 ```bash
-uv run python -m grpc_service.register_invoice_worker
+uv run python -m workers.register_invoice_worker
+
+uv run python -m workers.request_info_worker
 ```
 
 ### 5. gRPC Stubs neu generieren (nach Proto-Änderungen)
@@ -319,7 +354,7 @@ Dies baut alle Container, synchronisiert Dependencies mit `uv`, und startet alle
 **Mit Camunda Worker:** (erfordert einen erreichbaren Camunda 8 Gateway)
 
 ```bash
-docker compose --profile camunda up -d --build
+docker compose -f workers/docker-compose.yml up -d --build
 ```
 
 ### 3. Status der Container prüfen
@@ -335,7 +370,8 @@ Services starten mit:
 - `postgres` (Port 5432)
 - `rabbitmq` (Port 5672, UI: 15672)
 - `pgadmin` (Port 5050)
-- `camunda-worker` (nur mit `--profile camunda`)
+- `workers/register_invoice_worker.py`
+- `workers/request_info_worker.py`
 
 ### 4. RabbitMQ UI
 
@@ -394,7 +430,9 @@ uv run python -m grpc_service
 uv run python -m payment_service
 
 # Camunda Worker (benötigt Camunda 8 Gateway)
-uv run python -m grpc_service.register_invoice_worker
+uv run python -m workers.register_invoice_worker
+
+uv run python -m workers.request_info_worker
 
 # gRPC Stubs neu generieren (nach Proto-Änderungen)
 ./generate_grpc.sh
@@ -411,8 +449,8 @@ uv sync
 # Alles bauen und starten
 docker compose up -d --build
 
-# Nur mit Camunda Worker (mit Profil)
-docker compose --profile camunda up -d --build
+# Nur mit Camunda Worker (separater Stack)
+docker compose -f workers/docker-compose.yml up -d --build
 
 # Logs anschauen (alle Services)
 docker compose logs -f
@@ -447,7 +485,8 @@ uv sync
 uv run python -m grpc_service
 uv run python -m payment_service
 uv run python -m client.test_client
-uv run python -m grpc_service.register_invoice_worker
+uv run python -m workers.register_invoice_worker
+uv run python -m workers.request_info_worker
 
 # gRPC Stubs neu generieren (nach .proto Änderungen)
 ./generate_grpc.sh
@@ -505,11 +544,11 @@ docker images | grep rechnungsbearbeitung
 
 1. Stelle sicher, dass ein Zeebe/Camunda 8 Gateway erreichbar ist (Standard: `localhost:26500`)
 2. Umgebungsvariable setzen: `export ZEEBE_GRPC_ADDRESS=your-gateway:26500`
-3. In Docker mit `--profile camunda`: Prüfe `docker compose logs camunda-worker`
+3. In Docker mit `workers/docker-compose.yml`: Prüfe `docker compose -f workers/docker-compose.yml logs`
 4. **Für SaaS (Camunda Cloud):**
    - Prüfe, dass `.env` korrekt mit deinen Credentials gefüllt ist
    - Starte mit `export $(cat .env | xargs)` vor dem `uv run` Befehl
-   - Logs prüfen: `docker compose logs camunda-worker` oder `uv run python -m grpc_service.register_invoice_worker` in Terminal
+   - Logs prüfen: `docker compose -f workers/docker-compose.yml logs` oder `uv run python -m workers.register_invoice_worker` in Terminal
 5. Teste die Credentials lokal:
    ```bash
    uv run python -c "import os; os.getenv('CAMUNDA_CLIENT_MODE'); print('SaaS Mode:', os.getenv('CAMUNDA_CLIENT_MODE')); print('Cluster:', os.getenv('CAMUNDA_CLIENT_CLOUD_CLUSTER_ID'))"

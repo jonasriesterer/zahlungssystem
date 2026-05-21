@@ -74,28 +74,6 @@ services:
     networks:
       - invoice_network
 
-  # Camunda 8 Job Worker for invoice registration
-  camunda-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.grpc_server
-    command: [".venv/bin/python", "-m", "grpc_service.register_invoice_worker"]
-    profiles:
-      - camunda
-    environment:
-      CAMUNDA_CLIENT_ID: ${CAMUNDA_CLIENT_AUTH_CLIENT_ID}
-      CAMUNDA_CLIENT_SECRET: ${CAMUNDA_CLIENT_AUTH_CLIENT_SECRET}
-      CAMUNDA_REST_ADDRESS: https://${CAMUNDA_CLIENT_CLOUD_CLUSTER_ID}.${CAMUNDA_CLIENT_CLOUD_REGION}.zeebe.camunda.io/v2
-      DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
-      PYTHONPATH: /app
-    env_file:
-      - .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - invoice_network
-
   # pgAdmin Web UI for PostgreSQL
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -120,4 +98,4 @@ volumes:
 
 networks:
   invoice_network:
-    driver: bridge
+    name: invoice_network

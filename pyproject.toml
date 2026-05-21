@@ -33,7 +33,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["grpc_service", "payment_service", "config", "utils"]
+packages = ["grpc_service", "payment_service", "config", "utils", "workers"]
 
 [tool.ruff]
 line-length = 88

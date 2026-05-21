@@ -1,0 +1,33 @@
+services:
+  register-invoice-worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile.workers
+    command: [".venv/bin/python", "-m", "workers.register_invoice_worker"]
+    environment:
+      CAMUNDA_WORKER_NAME: register-invoice-worker
+      DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
+      PYTHONPATH: /app
+    env_file:
+      - ../.env
+    networks:
+      - invoice_network
+
+  request-info-worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile.workers
+    command: [".venv/bin/python", "-m", "workers.request_info_worker"]
+    environment:
+      CAMUNDA_WORKER_NAME: request-info-worker
+      DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
+      PYTHONPATH: /app
+    env_file:
+      - ../.env
+    networks:
+      - invoice_network
+
+networks:
+  invoice_network:
+    external: true
+    name: invoice_network
