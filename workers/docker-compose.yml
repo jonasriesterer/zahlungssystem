@@ -27,6 +27,20 @@ services:
     networks:
       - invoice_network
 
+  inform-supplier-rejection-worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile.workers
+    command: [".venv/bin/python", "-m", "workers.inform_supplier_rejection_worker"]
+    environment:
+      CAMUNDA_WORKER_NAME: inform-supplier-rejection-worker
+      DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
+      PYTHONPATH: /app
+    env_file:
+      - ../.env
+    networks:
+      - invoice_network
+
 networks:
   invoice_network:
     external: true

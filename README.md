@@ -179,32 +179,29 @@ Diese Fehler werden als Zeebe-Fehler beendet und können im BPMN-Modell mit Erro
 
 ### Camunda 8 Job Worker (`workers/request_info_worker.py`)
 
-**Zweck:** Verarbeitet Camunda-Jobs mit dem Typ `request-info-worker` und normalisiert eine Informationsanfrage für Camunda 8 Cloud.
+**Zweck:** Verarbeitet Camunda-Jobs mit dem Typ `request-info-worker`, liest das strukturierte Prozessobjekt `data` und veröffentlicht bei Bedarf die Nachricht `Message_InfoReceived`.
 
 **Eingangsvariablen:**
 
-- `requestedInfo`, `message` oder `details`
-- optional `requestId`
-- optional `subject`
-- optional `recipient` oder `customerEmail`
+- `data.simulateDelay` mit Standardwert `false`
+- `data.rechnungsDokument.documentId` als Correlation Key
 
 **Ergebnis bei Erfolg:**
 
 - `success=true`
 - `message`
 - `jobType`
-- `requestId`
-- `subject`
-- `requestedInfo`
-- `recipient`
-- `context`
+- `simulateDelay`
+- `documentId`
+- `infosErhalten`
+- `messagePublished`
 - `status`
-- `requestedAt`
 
 **Fehlerbehandlung:**
 
-- Fehlende Anfrageinhalte werden als Zeebe-Fehler zurückgegeben.
-- Unerwartete technische Fehler werden als Job-Failure gemeldet.
+- Fehlendes `data`-Objekt oder fehlende `documentId` werden als Zeebe-Fehler zurückgegeben.
+- Bei `simulateDelay=true` wird keine Nachricht gesendet, damit ein nachfolgendes Timer-Event greifen kann.
+- Technische Fehler beim Publizieren der Nachricht werden als Job-Failure gemeldet.
 
 #### Setup für Camunda Cloud SaaS
 

@@ -7,6 +7,8 @@ import os
 from typing import Any, Callable, Mapping
 
 from camunda_orchestration_sdk import CamundaAsyncClient
+from camunda_orchestration_sdk.api.message.publish_message import MessagePublicationRequest
+from camunda_orchestration_sdk.errors import ApiError
 from camunda_orchestration_sdk.runtime.job_worker import (
     JobContext,
     JobError,
@@ -14,6 +16,7 @@ from camunda_orchestration_sdk.runtime.job_worker import (
     JobWorker,
     WorkerConfig,
 )
+from httpx import TimeoutException as HttpxTimeoutException
 
 from .errors import CamundaJobError, CamundaJobTechnicalError
 
@@ -126,3 +129,35 @@ async def run_worker(worker: JobWorker, *, job_type: str, logger) -> None:
     )
     worker.start()
     await keep_worker_alive()
+
+
+async def publish_camunda_message(
+    *,
+    name: str,
+    correlation_key: str,
+    variables: Mapping[str, Any] | None = None,
+    logger,
+    time_to_live: int = 60_000,
+) -> Any:
+    """Publish a Camunda message with shared SDK error handling."""
+
+    client = CamundaAsyncClient()
+    try:
+        request = MessagePublicationRequest(
+            name=name,
+            correlation_key=correlation_key,
+            time_to_live=time_to_live,
+            variables=dict(variables or {}),
+        )
+        return await client.publish_message(data=request)
+    except (ApiError, HttpxTimeoutException) as exc:
+        logger.log_error(
+            "Failed to publish Camunda message",
+            exc_info=exc,
+            message_name=name,
+            correlation_key=correlation_key,
+        )
+        raise JobFailure(
+            "Technischer Fehler beim Senden der Camunda-Nachricht",
+            retries=None,
+        ) from exc

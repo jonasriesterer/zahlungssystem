@@ -5,13 +5,19 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Mapping
 
 from utils import StructuredLogger
 from workers.errors import CamundaJobValidationError
 from workers.job_types import REQUEST_INFO_JOB_TYPE
-from workers.runtime import create_job_worker, get_job_variables, map_job_exception, run_worker
+from workers.runtime import (
+    create_job_worker,
+    get_job_variables,
+    map_job_exception,
+    publish_camunda_message,
+    run_worker,
+)
+from camunda_orchestration_sdk.runtime.job_worker import JobContext
 
 
 logger = StructuredLogger.for_module(__name__)
@@ -27,47 +33,54 @@ class RequestInfoValidationError(CamundaJobValidationError):
 class RequestInfoPayload:
     """Validated payload extracted from a Camunda job."""
 
-    request_id: str
-    subject: str
-    requested_info: str
-    recipient: str | None
-    context: Any
+    simulate_delay: bool
+    store_id: str
 
 
-def _parse_payload(job) -> RequestInfoPayload:
-    """Validate and normalize request-info variables."""
+def _as_mapping(value: Any) -> Mapping[str, Any]:
+    """Return a plain mapping from dict-like SDK values."""
+
+    if hasattr(value, "to_dict"):
+        value = value.to_dict()
+    if isinstance(value, Mapping):
+        return value
+    return {}
+
+
+def _as_bool(value: Any, default: bool = False) -> bool:
+    """Normalize boolean-like Camunda variables."""
+
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off", ""}:
+            return False
+    return default
+
+
+def _parse_payload(job : JobContext) -> RequestInfoPayload:
+    """Validate and normalize the nested `data` payload."""
 
     variables = get_job_variables(job)
+    data = _as_mapping(variables.get("data"))
+    if not data:
+        raise RequestInfoValidationError("data-Objekt fehlt in den Job-Variablen")
 
-    requested_info = (
-        variables.get("requestedInfo")
-        or variables.get("message")
-        or variables.get("details")
-    )
-    if requested_info is None or str(requested_info).strip() == "":
-        raise RequestInfoValidationError(
-            "requestedInfo, message oder details muss gesetzt sein"
-        )
-
-    request_id = str(
-        variables.get("requestId")
-        or variables.get("correlationId")
-        or variables.get("invoiceID")
-        or ""
-    ).strip()
-    subject = str(variables.get("subject") or "additional-information").strip()
-    recipient = str(variables.get("recipient") or variables.get("customerEmail") or "").strip()
-    context = variables.get("context") or variables.get("metadata") or {}
-
-    if not subject:
-        raise RequestInfoValidationError("subject darf nicht leer sein")
+    store_id = str(data.get("storeId") or "").strip()
+    
+    if not store_id:
+        raise RequestInfoValidationError("data.storeId fehlt oder ist leer")
 
     return RequestInfoPayload(
-        request_id=request_id,
-        subject=subject,
-        requested_info=str(requested_info).strip(),
-        recipient=recipient or None,
-        context=context,
+        simulate_delay=_as_bool(data.get("simulateDelay"), default=False),
+        store_id=store_id,
     )
 
 
@@ -76,29 +89,43 @@ def _build_response(payload: RequestInfoPayload) -> dict[str, Any]:
 
     return {
         "success": True,
-        "message": "Information request prepared",
+        "message": "Request info job completed",
         "jobType": REQUEST_INFO_JOB_TYPE,
-        "requestId": payload.request_id,
-        "subject": payload.subject,
-        "requestedInfo": payload.requested_info,
-        "recipient": payload.recipient or "",
-        "context": payload.context,
-        "status": "requested",
-        "requestedAt": datetime.now(timezone.utc).isoformat(),
+        "simulateDelay": payload.simulate_delay,
+        "storeId": payload.store_id,
+        "messagePublished": not payload.simulate_delay,
+        "status": "message_published" if not payload.simulate_delay else "delay_simulated",
     }
 
 
-async def _request_info_handler(job) -> dict[str, Any]:
-    """Handle the `request-info-worker` Camunda job."""
+async def _request_info_handler(job : JobContext) -> dict[str, Any]:
+    """Handle the `request-info` Camunda job."""
 
     try:
         payload = _parse_payload(job)
         logger.log_debug(
             "Processing request-info job",
-            request_id=payload.request_id or "unknown",
-            subject=payload.subject,
-            recipient=payload.recipient or "n/a",
+            store_id=payload.store_id,
+            simulate_delay=payload.simulate_delay,
         )
+
+        if not payload.simulate_delay:
+            await publish_camunda_message(
+                name="Message_InfoReceived",
+                correlation_key=payload.store_id,
+                logger=logger,
+            )
+            logger.log_debug(
+                "Published info received message",
+                store_id=payload.store_id,
+                message_name="Message_InfoReceived",
+            )
+        else:
+            logger.log_debug(
+                "Skipping info message publication due to simulated delay",
+                store_id=payload.store_id,
+            )
+
         return _build_response(payload)
     except RequestInfoValidationError as exc:
         map_job_exception(
@@ -113,8 +140,8 @@ async def _request_info_handler(job) -> dict[str, Any]:
 def create_worker():
     """Create and configure the request-info worker instance."""
 
-    worker_name = os.getenv("CAMUNDA_WORKER_NAME", "request-info-worker")
-    fetch_vars = ["requestedInfo", "message", "details", "requestId", "subject", "recipient"]
+    worker_name = REQUEST_INFO_JOB_TYPE + "-worker"
+    fetch_vars = ["data"]
 
     return create_job_worker(
         job_type=REQUEST_INFO_JOB_TYPE,

@@ -176,7 +176,7 @@ async def _register_invoice_handler(job) -> dict[str, Any]:
 def create_worker():
     """Create and configure the Camunda worker instance."""
 
-    worker_name = os.getenv("CAMUNDA_WORKER_NAME", "register-invoice-worker")
+    worker_name = REGISTER_INVOICE_JOB_TYPE + "-worker"
     fetch_vars = ["amount", "invoiceID", "vendor"]
 
     return create_job_worker(
