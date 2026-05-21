@@ -123,7 +123,7 @@ async def _inform_supplier_rejection_handler(job: JobContext) -> dict[str, Any]:
             technical_message="Technischer Fehler beim Informieren des Lieferanten",
             logger=logger,
         )
-    except Exception as exc:
+    except (RuntimeError, TypeError, ValueError) as exc:
         map_job_exception(
             exc,
             job,
