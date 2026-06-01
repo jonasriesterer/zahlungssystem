@@ -154,6 +154,13 @@ async def _execute_payment_handler(job: JobContext) -> dict[str, Any]:
             invoice_id=payload.invoice_id,
             payment_id=payment_order["id"],
         )
+        logger.log_info(
+            "Execute-payment successfully processed",
+            job_type=EXECUTE_PAYMENT_JOB_TYPE,
+            invoice_id=payload.invoice_id,
+            payment_id=payment_order["id"],
+            queue="payment_orders",
+        )
         return {
             "payment_order_created": True,
             "payment_id": payment_order["id"],

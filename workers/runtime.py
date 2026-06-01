@@ -21,6 +21,89 @@ from httpx import TimeoutException as HttpxTimeoutException
 from .errors import CamundaJobError, CamundaJobTechnicalError
 
 
+def _patch_camunda_sdk_job_activation_parsing() -> None:
+    """Work around SDK parsing issues for optional job fields in activate_jobs."""
+
+    try:
+        from camunda_orchestration_sdk.models import job_activation_result as model
+        from camunda_orchestration_sdk.models.activated_job_result import (
+            ActivatedJobResult,
+        )
+    except Exception:
+        return
+
+    if getattr(model.JobActivationResult, "_rechnungsbearbeitung_patch", False):
+        return
+
+    original_from_dict = model.JobActivationResult.from_dict.__func__
+
+    @classmethod
+    def patched_from_dict(cls, src_dict):
+        d = dict(src_dict)
+        jobs: list[ActivatedJobResult] = []
+        for jobs_item_data in d.pop("jobs"):
+            item = dict(jobs_item_data)
+            item.setdefault("userTask", None)
+            item.setdefault("tags", [])
+            item.setdefault("rootProcessInstanceKey", None)
+            jobs.append(ActivatedJobResult.from_dict(item))
+
+        result = cls(jobs=jobs)
+        result.additional_properties = d
+        return result
+
+    model.JobActivationResult.from_dict = patched_from_dict
+    model.JobActivationResult._rechnungsbearbeitung_patch = True
+    model.JobActivationResult._rechnungsbearbeitung_original_from_dict = (
+        original_from_dict
+    )
+
+
+def _apply_camunda_env_compatibility() -> None:
+    """Map legacy Camunda env vars to the SDK v9 configuration keys.
+
+    The project historically used `CAMUNDA_CLIENT_MODE=saas` plus cloud-specific
+    variables. SDK v9 expects REST + auth strategy variables instead.
+    """
+
+    client_id = os.getenv("CAMUNDA_CLIENT_ID") or os.getenv(
+        "CAMUNDA_CLIENT_AUTH_CLIENTID"
+    )
+    legacy_client_id = os.getenv("CAMUNDA_CLIENT_AUTH_CLIENT_ID")
+    if not client_id and legacy_client_id:
+        os.environ["CAMUNDA_CLIENT_ID"] = legacy_client_id
+        os.environ["CAMUNDA_CLIENT_AUTH_CLIENTID"] = legacy_client_id
+
+    client_secret = os.getenv("CAMUNDA_CLIENT_SECRET") or os.getenv(
+        "CAMUNDA_CLIENT_AUTH_CLIENTSECRET"
+    )
+    legacy_client_secret = os.getenv("CAMUNDA_CLIENT_AUTH_CLIENT_SECRET")
+    if not client_secret and legacy_client_secret:
+        os.environ["CAMUNDA_CLIENT_SECRET"] = legacy_client_secret
+        os.environ["CAMUNDA_CLIENT_AUTH_CLIENTSECRET"] = legacy_client_secret
+
+    if os.getenv("CAMUNDA_CLIENT_MODE", "").lower() == "saas":
+        cluster_id = os.getenv("CAMUNDA_CLIENT_CLOUD_CLUSTER_ID")
+        region = os.getenv("CAMUNDA_CLIENT_CLOUD_REGION")
+        if cluster_id and region:
+            modern_saas_rest = f"https://{region}.zeebe.camunda.io/{cluster_id}/v2"
+            rest_address = os.getenv("CAMUNDA_REST_ADDRESS", "").strip()
+            legacy_host = f"{cluster_id}.{region}.zeebe.camunda.io"
+
+            if not rest_address:
+                os.environ["CAMUNDA_REST_ADDRESS"] = modern_saas_rest
+            elif legacy_host in rest_address:
+                # Backward compatibility: convert gRPC-style SaaS host to REST v2 URL.
+                os.environ["CAMUNDA_REST_ADDRESS"] = modern_saas_rest
+
+    if (
+        not os.getenv("CAMUNDA_AUTH_STRATEGY")
+        and os.getenv("CAMUNDA_CLIENT_ID")
+        and os.getenv("CAMUNDA_CLIENT_SECRET")
+    ):
+        os.environ["CAMUNDA_AUTH_STRATEGY"] = "OAUTH"
+
+
 def create_job_worker(
     job_type: str,
     task_handler: Callable[[JobContext], Any],
@@ -31,6 +114,9 @@ def create_job_worker(
     max_concurrent_jobs: int | None = None,
 ) -> JobWorker:
     """Create a configured `JobWorker` instance."""
+
+    _patch_camunda_sdk_job_activation_parsing()
+    _apply_camunda_env_compatibility()
 
     if timeout_ms is None:
         timeout_env = os.getenv("CAMUNDA_WORKER_TIMEOUT")
@@ -66,6 +152,10 @@ def get_job_variables(job: JobContext) -> Mapping[str, Any]:
 
 def get_zeebe_address() -> str:
     """Resolve the configured Zeebe endpoint for logging."""
+
+    rest_address = os.getenv("CAMUNDA_REST_ADDRESS")
+    if rest_address:
+        return rest_address
 
     if os.getenv("CAMUNDA_CLIENT_MODE", "").lower() == "saas":
         cluster_id = os.getenv("CAMUNDA_CLIENT_CLOUD_CLUSTER_ID", "unknown")
@@ -140,6 +230,9 @@ async def publish_camunda_message(
     time_to_live: int = 60_000,
 ) -> Any:
     """Publish a Camunda message with shared SDK error handling."""
+
+    _patch_camunda_sdk_job_activation_parsing()
+    _apply_camunda_env_compatibility()
 
     client = CamundaAsyncClient()
     try:

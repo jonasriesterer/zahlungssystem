@@ -126,6 +126,13 @@ async def _request_info_handler(job : JobContext) -> dict[str, Any]:
                 store_id=payload.store_id,
             )
 
+        logger.log_info(
+            "Request-info successfully processed",
+            job_type=REQUEST_INFO_JOB_TYPE,
+            store_id=payload.store_id,
+            simulate_delay=payload.simulate_delay,
+        )
+
         return _build_response(payload)
     except RequestInfoValidationError as exc:
         map_job_exception(

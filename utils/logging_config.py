@@ -223,6 +223,19 @@ class StructuredLogger:
             self.logger.warning("%s - %s", message, context_str)
         else:
             self.logger.warning(message)
+
+    def log_info(self, message: str, **context: Any) -> None:
+        """Log an info message with context.
+
+        Args:
+            message: Info message
+            **context: Additional context (lazy evaluated)
+        """
+        context_str = ", ".join(f"{k}=%s" % (v,) for k, v in context.items())
+        if context_str:
+            self.logger.info("%s - %s", message, context_str)
+        else:
+            self.logger.info(message)
     
     def log_debug(self, message: str, **context: Any) -> None:
         """Log debug info with context.

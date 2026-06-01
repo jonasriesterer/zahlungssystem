@@ -158,6 +158,12 @@ async def _register_invoice_handler(job) -> dict[str, Any]:
             invoice_id=invoice.id,
             status=invoice.status,
         )
+        logger.log_info(
+            "Register-invoice successfully processed",
+            job_type=REGISTER_INVOICE_JOB_TYPE,
+            invoice_id=invoice.id,
+            status=invoice.status,
+        )
         return _invoice_to_variables(invoice)
     except (
         RegisterInvoiceValidationError,

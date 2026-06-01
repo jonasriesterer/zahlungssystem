@@ -31,6 +31,7 @@ class InformSupplierRejectionPayload:
     """Validated payload extracted from a Camunda job."""
 
     invoice_id: str
+    store_id: str
     amount: float
     rejection_msg: str
 
@@ -41,12 +42,17 @@ def _parse_payload(job: JobContext) -> InformSupplierRejectionPayload:
     variables = get_job_variables(job)
 
     raw_invoice_id = variables.get("invoiceID")
+    raw_store_id = variables.get("storeId")
     raw_amount = variables.get("amount")
     raw_rejection_msg = variables.get("rejectionMsg")
 
     invoice_id = str(raw_invoice_id or "").strip()
     if not invoice_id:
         raise InformSupplierRejectionValidationError("invoiceID darf nicht leer sein")
+
+    store_id = str(raw_store_id or "").strip()
+    if not store_id:
+        raise InformSupplierRejectionValidationError("storeId darf nicht leer sein")
 
     if raw_amount is None:
         raise InformSupplierRejectionValidationError("amount fehlt in den Job-Variablen")
@@ -60,6 +66,7 @@ def _parse_payload(job: JobContext) -> InformSupplierRejectionPayload:
 
     return InformSupplierRejectionPayload(
         invoice_id=invoice_id,
+        store_id=store_id,
         amount=amount,
         rejection_msg=rejection_msg
     )
@@ -113,6 +120,12 @@ async def _inform_supplier_rejection_handler(job: JobContext) -> dict[str, Any]:
         logger.log_debug(
             "Inform-supplier-rejection job completed",
             invoice_id=payload.invoice_id
+        )
+        logger.log_info(
+            "Inform-supplier-rejection successfully processed",
+            job_type=INFORM_SUPPLIER_REJECTION_JOB_TYPE,
+            invoice_id=payload.invoice_id,
+            store_id=payload.store_id,
         )
         return {"email_sent": True}
     except InformSupplierRejectionValidationError as exc:
