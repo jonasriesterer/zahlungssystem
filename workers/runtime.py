@@ -8,6 +8,9 @@ from typing import Any, Callable, Mapping
 
 from camunda_orchestration_sdk import CamundaAsyncClient
 from camunda_orchestration_sdk.api.message.publish_message import MessagePublicationRequest
+from camunda_orchestration_sdk.models.message_publication_request_variables import (
+    MessagePublicationRequestVariables,
+)
 from camunda_orchestration_sdk.errors import ApiError
 from camunda_orchestration_sdk.runtime.job_worker import (
     JobContext,
@@ -236,11 +239,14 @@ async def publish_camunda_message(
 
     client = CamundaAsyncClient()
     try:
+        message_variables = MessagePublicationRequestVariables.from_dict(
+            dict(variables or {})
+        )
         request = MessagePublicationRequest(
             name=name,
             correlation_key=correlation_key,
             time_to_live=time_to_live,
-            variables=dict(variables or {}),
+            variables=message_variables,
         )
         return await client.publish_message(data=request)
     except (ApiError, HttpxTimeoutException) as exc:
