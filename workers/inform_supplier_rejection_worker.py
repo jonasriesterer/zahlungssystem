@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 from camunda_orchestration_sdk.runtime.job_worker import JobContext
 
@@ -26,6 +26,16 @@ class InformSupplierRejectionValidationError(CamundaJobValidationError):
     error_code = "INFORM_SUPPLIER_REJECTION_VALIDATION_ERROR"
 
 
+def _as_mapping(value: Any) -> Mapping[str, Any]:
+    """Return a plain mapping from dict-like SDK values."""
+
+    if hasattr(value, "to_dict"):
+        value = value.to_dict()
+    if isinstance(value, Mapping):
+        return value
+    return {}
+
+
 @dataclass(frozen=True)
 class InformSupplierRejectionPayload:
     """Validated payload extracted from a Camunda job."""
@@ -40,9 +50,10 @@ def _parse_payload(job: JobContext) -> InformSupplierRejectionPayload:
     """Validate and normalize the variables expected by the worker."""
 
     variables = get_job_variables(job)
+    data = _as_mapping(variables.get("data"))
 
     raw_invoice_id = variables.get("invoiceID")
-    raw_store_id = variables.get("storeId")
+    raw_store_id = data.get("storeId")
     raw_amount = variables.get("amount")
     raw_rejection_msg = variables.get("rejectionMsg")
 
@@ -52,7 +63,7 @@ def _parse_payload(job: JobContext) -> InformSupplierRejectionPayload:
 
     store_id = str(raw_store_id or "").strip()
     if not store_id:
-        raise InformSupplierRejectionValidationError("storeId darf nicht leer sein")
+        raise InformSupplierRejectionValidationError("data.storeId darf nicht leer sein")
 
     if raw_amount is None:
         raise InformSupplierRejectionValidationError("amount fehlt in den Job-Variablen")
@@ -150,7 +161,7 @@ def create_worker():
     """Create and configure the inform-supplier-rejection worker instance."""
 
     worker_name = INFORM_SUPPLIER_REJECTION_JOB_TYPE + "-worker"
-    fetch_vars = ["invoiceID", "amount", "rejectionMsg", "storeId"]
+    fetch_vars = ["invoiceID", "amount", "rejectionMsg", "data"]
 
     return create_job_worker(
         job_type=INFORM_SUPPLIER_REJECTION_JOB_TYPE,
