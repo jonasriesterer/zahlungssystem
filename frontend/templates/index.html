@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>ERP System - Rechnungserfassung</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; max-width: 600px; background-color: #f4f4f9;}
+        .container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; width: 100%; font-size: 16px; }
+        button:hover { background-color: #0056b3; }
+        .message { padding: 10px; margin-bottom: 15px; border-radius: 4px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ERP System - Rechnungen</h1>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="message {{ category }}" id="status_message">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="/" id="invoiceForm">
+            <div class="form-group">
+                <label for="invoice_id">Rechnungs-ID:</label>
+                <input type="text" id="invoice_id" name="invoice_id" required placeholder="z.B. INV-100">
+            </div>
+            <div class="form-group">
+                <label for="supplier">Lieferant:</label>
+                <input type="text" id="supplier" name="supplier" required placeholder="z.B. Acme Corp">
+            </div>
+            <div class="form-group">
+                <label for="amount">Betrag (€):</label>
+                <input type="number" id="amount" name="amount" step="0.01" required placeholder="z.B. 250.50">
+            </div>
+            <button type="submit" id="submit_btn">Rechnung speichern</button>
+        </form>
+    </div>
+</body>
+</html>

@@ -6,8 +6,9 @@ services:
       POSTGRES_USER: invoice_user
       POSTGRES_PASSWORD: invoice_password
       POSTGRES_DB: invoice_db
+      PGDATA: /var/lib/postgresql/data  # <--- NEU
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql # <--- GEÄNDERT (ohne /data)
     networks:
       - invoice_network
     healthcheck:
