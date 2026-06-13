@@ -25,17 +25,6 @@ class InformSupplierRejectionValidationError(CamundaJobValidationError):
 
     error_code = "INFORM_SUPPLIER_REJECTION_VALIDATION_ERROR"
 
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    """Return a plain mapping from dict-like SDK values."""
-
-    if hasattr(value, "to_dict"):
-        value = value.to_dict()
-    if isinstance(value, Mapping):
-        return value
-    return {}
-
-
 @dataclass(frozen=True)
 class InformSupplierRejectionPayload:
     """Validated payload extracted from a Camunda job."""

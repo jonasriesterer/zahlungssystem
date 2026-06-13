@@ -5,11 +5,12 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from utils import StructuredLogger
 from workers.errors import CamundaJobValidationError
 from workers.job_types import REQUEST_INFO_JOB_TYPE
+from workers.helpers import _as_mapping, _as_bool
 from workers.runtime import (
     create_job_worker,
     get_job_variables,
@@ -37,35 +38,7 @@ class RequestInfoPayload:
     store_id: str
 
 
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    """Return a plain mapping from dict-like SDK values."""
-
-    if hasattr(value, "to_dict"):
-        value = value.to_dict()
-    if isinstance(value, Mapping):
-        return value
-    return {}
-
-
-def _as_bool(value: Any, default: bool = False) -> bool:
-    """Normalize boolean-like Camunda variables."""
-
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"true", "1", "yes", "y", "on"}:
-            return True
-        if normalized in {"false", "0", "no", "n", "off", ""}:
-            return False
-    return default
-
-
-def _parse_payload(job : JobContext) -> RequestInfoPayload:
+def _parse_payload(job: JobContext) -> RequestInfoPayload:
     """Validate and normalize the nested `data` payload."""
 
     variables = get_job_variables(job)
@@ -74,7 +47,7 @@ def _parse_payload(job : JobContext) -> RequestInfoPayload:
         raise RequestInfoValidationError("data-Objekt fehlt in den Job-Variablen")
 
     store_id = str(data.get("storeId") or "").strip()
-    
+
     if not store_id:
         raise RequestInfoValidationError("data.storeId fehlt oder ist leer")
 
@@ -94,11 +67,13 @@ def _build_response(payload: RequestInfoPayload) -> dict[str, Any]:
         "simulateDelay": payload.simulate_delay,
         "storeId": payload.store_id,
         "messagePublished": not payload.simulate_delay,
-        "status": "message_published" if not payload.simulate_delay else "delay_simulated",
+        "status": "message_published"
+        if not payload.simulate_delay
+        else "delay_simulated",
     }
 
 
-async def _request_info_handler(job : JobContext) -> dict[str, Any]:
+async def _request_info_handler(job: JobContext) -> dict[str, Any]:
     """Handle the `request-info` Camunda job."""
 
     try:

@@ -19,6 +19,7 @@ from workers.errors import (
 )
 from workers.job_types import REGISTER_INVOICE_JOB_TYPE
 from workers.runtime import create_job_worker, get_job_variables, map_job_exception, run_worker
+from workers.helpers import _as_mapping
 
 
 logger = StructuredLogger.for_module(__name__)
@@ -60,13 +61,17 @@ def _parse_payload(job) -> RegisterInvoicePayload:
 
     variables = get_job_variables(job)
 
-    raw_amount = variables.get("amount")
-    raw_invoice_id = variables.get("invoiceID")
-    raw_vendor = variables.get("vendor")
+    invoice = _as_mapping(variables.get("invoice"))
+    if not invoice:
+        raise RegisterInvoiceValidationError("invoice-Objekt fehlt in den Job-Variablen")
+
+    raw_amount = invoice.get("amount")
+    raw_invoice_id = invoice.get("id")
+    raw_vendor = invoice.get("vendor")
 
     if raw_amount is None or raw_invoice_id is None or raw_vendor is None:
         raise RegisterInvoiceValidationError(
-            "Pflichtvariablen amount, invoiceID und vendor fehlen"
+            "Pflichtvariablen amount, id und vendor fehlen"
         )
 
     try:
@@ -183,7 +188,7 @@ def create_worker():
     """Create and configure the Camunda worker instance."""
 
     worker_name = REGISTER_INVOICE_JOB_TYPE + "-worker"
-    fetch_vars = ["amount", "invoiceID", "vendor"]
+    fetch_vars = ["invoice"]
 
     return create_job_worker(
         job_type=REGISTER_INVOICE_JOB_TYPE,
