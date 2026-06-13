@@ -55,6 +55,51 @@ services:
     networks:
       - invoice_network
 
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    networks:
+      - invoice_network
+
+  mail-listener-worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile.workers
+    command: [".venv/bin/python", "-m", "workers.mail_listener"]
+    environment:
+      CAMUNDA_WORKER_NAME: mail-listener-worker
+      MAILPIT_API_URL: http://mailpit:8025/api/v1
+      PYTHONPATH: /app
+    env_file:
+      - ../.env
+    networks:
+      - invoice_network
+    depends_on:
+      - mailpit
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - invoice_network
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: http n8n:5678
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    networks:
+      - invoice_network
+    depends_on:
+      - n8n
+
 networks:
   invoice_network:
     external: true

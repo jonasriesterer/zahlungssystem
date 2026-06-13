@@ -95,6 +95,7 @@ volumes:
   postgres_data:
   rabbitmq_data:
   pgadmin_data:
+  n8n_data:
 
 networks:
   invoice_network:
