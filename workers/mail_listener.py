@@ -13,7 +13,7 @@ logger = StructuredLogger.for_module(__name__)
 MAILPIT_API_URL = os.getenv("MAILPIT_API_URL", "http://mailpit:8025/api/v1")
 NGROK_API_URL = os.getenv("NGROK_API_URL", "http://ngrok:4040/api/tunnels")
 START_MESSAGE_NAME = "Message_InvoiceReceived"
-N8N_WEBHOOK_ENDPOINT = "/webhook-test/extract-invoice"
+N8N_WEBHOOK_ENDPOINT = "/webhook/extract-invoice"
 
 
 async def get_dynamic_ngrok_url(client: httpx.AsyncClient) -> str:
@@ -79,7 +79,7 @@ async def poll_mailpit():
                                 )
 
                                 logger.log_info(
-                                    "Camunda Prozess gestartet.",
+                                    "[SUCCESS]Camunda Prozess gestartet.",
                                     webhook=n8n_webhook_url,
                                 )
 

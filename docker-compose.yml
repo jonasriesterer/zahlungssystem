@@ -1,5 +1,7 @@
 services:
-  # PostgreSQL Database
+  # ==========================================
+  # DATABASES & INFRASTRUCTURE
+  # ==========================================
   postgres:
     image: postgres:18-alpine
     environment:
@@ -16,7 +18,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # RabbitMQ Message Broker
   rabbitmq:
     image: rabbitmq:3-management-alpine
     environment:
@@ -35,7 +36,25 @@ services:
       timeout: 5s
       retries: 5
 
-  # gRPC Invoice Service
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: "True"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - invoice_network
+
+  # ==========================================
+  # CORE BACKEND SERVICES
+  # ==========================================
   grpc-server:
     build:
       context: .
@@ -54,7 +73,6 @@ services:
     networks:
       - invoice_network
 
-  # Payment Processing Service
   payment-service:
     build:
       context: .
@@ -74,28 +92,125 @@ services:
     networks:
       - invoice_network
 
-  # pgAdmin Web UI for PostgreSQL
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
-      PGADMIN_CONFIG_SERVER_MODE: "True"
+  # ==========================================
+  # TOOLS (MAILPIT, N8N, NGROK)
+  # ==========================================
+  mailpit:
+    image: axllent/mailpit
     ports:
-      - "5050:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - "8025:8025"
+      - "1025:1025"
     networks:
       - invoice_network
 
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - invoice_network
+    dns:              
+      - 8.8.8.8        
+      - 1.1.1.1
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: http n8n:5678
+    env_file:
+      - .env
+    networks:
+      - invoice_network
+    depends_on:
+      - n8n
+
+  # ==========================================
+  # CAMUNDA WORKERS
+  # ==========================================
+  register-invoice-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.workers
+    command: [".venv/bin/python", "-m", "workers.register_invoice_worker"]
+    environment:
+      CAMUNDA_WORKER_NAME: register-invoice-worker
+      DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
+      PYTHONPATH: /app
+    env_file:
+      - .env
+    networks:
+      - invoice_network
+
+  request-info-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.workers
+    command: [".venv/bin/python", "-m", "workers.request_info_worker"]
+    environment:
+      CAMUNDA_WORKER_NAME: request-info-worker
+      DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
+      PYTHONPATH: /app
+    env_file:
+      - .env
+    networks:
+      - invoice_network
+
+  inform-supplier-rejection-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.workers
+    command: [".venv/bin/python", "-m", "workers.inform_supplier_rejection_worker"]
+    environment:
+      CAMUNDA_WORKER_NAME: inform-supplier-rejection-worker
+      DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
+      PYTHONPATH: /app
+    env_file:
+      - .env
+    networks:
+      - invoice_network
+
+  execute-payment-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.workers
+    command: [".venv/bin/python", "-m", "workers.execute_payment_worker"]
+    environment:
+      CAMUNDA_WORKER_NAME: execute-payment-worker
+      DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
+      PYTHONPATH: /app
+    env_file:
+      - .env
+    networks:
+      - invoice_network
+
+  mail-listener-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.workers
+    command: [".venv/bin/python", "-m", "workers.mail_listener"]
+    environment:
+      CAMUNDA_WORKER_NAME: mail-listener-worker
+      MAILPIT_API_URL: http://mailpit:8025/api/v1
+      PYTHONPATH: /app
+    env_file:
+      - .env
+    networks:
+      - invoice_network
+    depends_on:
+      - mailpit
+
+# ==========================================
+# VOLUMES & NETWORKS
+# ==========================================
 volumes:
   postgres_data:
   rabbitmq_data:
   pgadmin_data:
   n8n_data:
+    external: true # Behält deine bestehenden n8n-Workflows!
 
 networks:
   invoice_network:

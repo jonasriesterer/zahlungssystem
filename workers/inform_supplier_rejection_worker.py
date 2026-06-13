@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from camunda_orchestration_sdk.runtime.job_worker import JobContext
 
@@ -13,6 +13,7 @@ from utils import StructuredLogger
 from workers.errors import CamundaJobValidationError
 from workers.job_types import INFORM_SUPPLIER_REJECTION_JOB_TYPE
 from workers.runtime import create_job_worker, get_job_variables, map_job_exception, run_worker
+from workers.helpers import _as_mapping
 
 
 logger = StructuredLogger.for_module(__name__)

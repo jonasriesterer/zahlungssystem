@@ -100,6 +100,10 @@ services:
     depends_on:
       - n8n
 
+volumes:
+  n8n_data:
+    external: true
+
 networks:
   invoice_network:
     external: true
