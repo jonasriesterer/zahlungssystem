@@ -271,68 +271,7 @@ logger.log_rabbitmq_event("MESSAGE_RECEIVED", status="IN_PROGRESS", queue="payme
 
 ---
 
-## Lokales Setup (Entwicklung)
-
-Voraussetzungen:
-
-- Python >=3.9
-- `uv` (https://docs.astral.sh/uv/getting-started/#installation)
-
-### 1. Dependencies installieren
-
-```bash
-uv sync
-```
-
-Dies erstellt automatisch eine `.venv` und installiert alle Abhängigkeiten aus `pyproject.toml`.
-
-### 2. Lokal den gRPC Server starten
-
-```bash
-uv run python -m grpc_service
-```
-
-Der Server läuft dann auf `localhost:50051`.
-
-### 3. Lokal den Payment Service starten
-
-```bash
-uv run python -m payment_service
-```
-
-### 4. Lokal den Camunda Worker starten
-
-Nur sinnvoll, wenn du einen lokalen Zeebe/Camunda 8 Gateway laufen hast:
-
-```bash
-uv run python -m workers.register_invoice_worker
-
-uv run python -m workers.request_info_worker
-```
-
-### 5. gRPC Stubs neu generieren (nach Proto-Änderungen)
-
-```bash
-./generate_grpc.sh
-```
-
-### 6. Test Client ausführen
-
-```bash
-uv run python -m client.test_client
-```
-
-**Hinweis:** Lokal brauchst du für `uv` kein `.venv` im Repository-Root. `uv sync` erstellt automatisch eine `.venv`, falls nötig.
-
----
-
 ## Container Setup
-
-Voraussetzungen:
-
-- Docker
-- Docker Compose Plugin
-- (Optional) `uv` zum lokalen Testen ohne Docker
 
 ### 1. Repository klonen und in Verzeichnis wechseln
 
@@ -346,13 +285,7 @@ cd rechnungsbearbeitung
 docker compose up -d --build
 ```
 
-Dies baut alle Container, synchronisiert Dependencies mit `uv`, und startet alle Services.
-
-**Mit Camunda Worker:** (erfordert einen erreichbaren Camunda 8 Gateway)
-
-```bash
-docker compose -f workers/docker-compose.yml up -d --build
-```
+Dies baut alle Container, synchronisiert Dependencies mit `uv`, und startet alle Services sowie Worker.
 
 ### 3. Status der Container prüfen
 
@@ -360,15 +293,6 @@ docker compose -f workers/docker-compose.yml up -d --build
 docker compose ps
 docker compose logs -f
 ```
-
-Services starten mit:
-- `grpc-server` (Port 50051)
-- `payment-service` (RabbitMQ Consumer)
-- `postgres` (Port 5432)
-- `rabbitmq` (Port 5672, UI: 15672)
-- `pgadmin` (Port 5050)
-- `workers/register_invoice_worker.py`
-- `workers/request_info_worker.py`
 
 ### 4. RabbitMQ UI
 
@@ -414,29 +338,6 @@ uv run python -m client.test_client
 Der Test Client erstellt eine Beispiel-Rechnung, ruft sie ab und aktualisiert den Status.
 
 ---
-
-## Manuelles Ausführen von Komponenten
-
-Falls du einzelne Services lokal (ohne Docker) starten möchtest:
-
-```bash
-# gRPC Server
-uv run python -m grpc_service
-
-# Payment Service (benötigt RabbitMQ)
-uv run python -m payment_service
-
-# Camunda Worker (benötigt Camunda 8 Gateway)
-uv run python -m workers.register_invoice_worker
-
-uv run python -m workers.request_info_worker
-
-# gRPC Stubs neu generieren (nach Proto-Änderungen)
-./generate_grpc.sh
-
-# Dependencies synchronisieren
-uv sync
-```
 
 ## Befehls-Referenz
 

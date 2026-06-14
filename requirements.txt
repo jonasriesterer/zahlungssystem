@@ -16,3 +16,5 @@ pika==1.3.2
 # Configuration
 python-dotenv==1.0.0
 camunda-orchestration-sdk>=9.0.1
+
+pdf2image==1.17.0

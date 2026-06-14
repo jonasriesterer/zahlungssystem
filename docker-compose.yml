@@ -119,7 +119,7 @@ services:
 
   ngrok:
     image: ngrok/ngrok:latest
-    command: http n8n:5678
+    command: "http n8n:5678"
     env_file:
       - .env
     networks:
@@ -201,6 +201,7 @@ services:
       - invoice_network
     depends_on:
       - mailpit
+      - ngrok
 
 # ==========================================
 # VOLUMES & NETWORKS
@@ -210,7 +211,7 @@ volumes:
   rabbitmq_data:
   pgadmin_data:
   n8n_data:
-    external: true # Behält deine bestehenden n8n-Workflows!
+    external: true
 
 networks:
   invoice_network:
