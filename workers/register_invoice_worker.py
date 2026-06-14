@@ -65,19 +65,19 @@ def _parse_payload(job) -> RegisterInvoicePayload:
     if not invoice:
         raise RegisterInvoiceValidationError("invoice-Objekt fehlt in den Job-Variablen")
 
-    raw_amount = invoice.get("amount")
-    raw_invoice_id = invoice.get("id")
+    raw_amount = invoice.get("amount_net")
+    raw_invoice_id = invoice.get("invoiceID")
     raw_vendor = invoice.get("vendor")
 
     if raw_amount is None or raw_invoice_id is None or raw_vendor is None:
         raise RegisterInvoiceValidationError(
-            "Pflichtvariablen amount, id und vendor fehlen"
+            "Pflichtvariablen amount_net, invoiceID und vendor fehlen"
         )
 
     try:
         amount = float(raw_amount)
     except (TypeError, ValueError) as exc:
-        raise RegisterInvoiceValidationError("amount muss eine Zahl sein") from exc
+        raise RegisterInvoiceValidationError("amount_net muss eine Zahl sein") from exc
 
     invoice_id = str(raw_invoice_id).strip()
     vendor = str(raw_vendor).strip()
@@ -89,7 +89,7 @@ def _parse_payload(job) -> RegisterInvoicePayload:
         raise RegisterInvoiceValidationError("vendor darf nicht leer sein")
 
     if amount <= 0:
-        raise RegisterInvoiceValidationError("amount muss größer als 0 sein")
+        raise RegisterInvoiceValidationError("amount_net muss größer als 0 sein")
 
     return RegisterInvoicePayload(amount=amount, invoice_id=invoice_id, vendor=vendor)
 
